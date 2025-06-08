@@ -1,16 +1,15 @@
 package dev.isxander.yacl3.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.math.Axis;
 import dev.isxander.yacl3.api.*;
 import dev.isxander.yacl3.api.utils.Dimension;
 import dev.isxander.yacl3.api.utils.MutableDimension;
 import dev.isxander.yacl3.api.utils.OptionUtils;
-import dev.isxander.yacl3.gui.controllers.PopupControllerScreen;
 import dev.isxander.yacl3.gui.controllers.ControllerPopupWidget;
+import dev.isxander.yacl3.gui.controllers.PopupControllerScreen;
 import dev.isxander.yacl3.gui.tab.ListHolderWidget;
-import dev.isxander.yacl3.gui.tab.ScrollableNavigationBar;
 import dev.isxander.yacl3.gui.tab.TabExt;
+import dev.isxander.yacl3.gui.tab.VerticalNavigationBar;
 import dev.isxander.yacl3.gui.utils.GuiUtils;
 import dev.isxander.yacl3.impl.utils.YACLConstants;
 import dev.isxander.yacl3.platform.YACLPlatform;
@@ -39,254 +38,273 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public class YACLScreen extends Screen {
-    public final YetAnotherConfigLib config;
+	public final YetAnotherConfigLib config;
 
-    private final Screen parent;
+	private final Screen parent;
 
-    public final TabManager tabManager = new TabManager(this::addRenderableWidget, this::removeWidget);
-    public ScrollableNavigationBar tabNavigationBar;
-    public ScreenRectangle tabArea;
+	public final TabManager tabManager = new TabManager(this::addRenderableWidget, this::removeWidget);
+	//    public ScrollableNavigationBar tabNavigationBar;
+	public VerticalNavigationBar tabNavigationBar;
+	public ScreenRectangle tabArea;
 
-    public Component saveButtonMessage;
-    public Tooltip saveButtonTooltipMessage;
-    private int saveButtonMessageTime;
+	public Component saveButtonMessage;
+	public Tooltip saveButtonTooltipMessage;
+	private int saveButtonMessageTime;
 
-    private boolean pendingChanges;
+	private boolean pendingChanges;
 
-    public ControllerPopupWidget<?> currentPopupController = null;
-    public boolean popupControllerVisible = false;
+	public ControllerPopupWidget<?> currentPopupController = null;
+	public boolean popupControllerVisible = false;
 
-    public YACLScreen(YetAnotherConfigLib config, Screen parent) {
-        super(config.title());
-        this.config = config;
-        this.parent = parent;
+	public YACLScreen(YetAnotherConfigLib config, Screen parent) {
+		super(config.title());
+		this.config = config;
+		this.parent = parent;
 
-        OptionUtils.forEachOptions(config, option -> {
-            option.addListener((opt, val) -> onOptionChanged(opt));
-        });
-    }
+		OptionUtils.forEachOptions(config, option -> {
+			option.addListener((opt, val) -> onOptionChanged(opt));
+		});
+	}
 
-    @Override
-    protected void init() {
-        tabArea = new ScreenRectangle(0, 24 - 1, this.width, this.height - 24 + 1);
+	@Override
+	protected void init() {
+		int columnWidth = width / 4;
+		int padding = columnWidth / 20;
+		columnWidth = Math.min(columnWidth, 400);
+		int paddedWidth = columnWidth - padding * 2;
+		tabArea = new ScreenRectangle(0, 0, VerticalNavigationBar.MAX_WIDTH, height);
 
-        int currentTab = tabNavigationBar != null
-                ? tabNavigationBar.getTabs().indexOf(tabManager.getCurrentTab())
-                : 0;
-        if (currentTab == -1)
-            currentTab = 0;
+		int currentTab = tabNavigationBar != null
+						 ? tabNavigationBar.getTabs().indexOf(tabManager.getCurrentTab())
+						 : 0;
+		if (currentTab == -1)
+			currentTab = 0;
 
-        tabNavigationBar = new ScrollableNavigationBar(this.width, tabManager, config.categories()
-                .stream()
-                .map(category -> {
-                    if (category instanceof CustomTabProvider tabProvider) {
-                        return tabProvider.createTab(this, tabArea);
-                    }
-                    if (category instanceof PlaceholderCategory placeholder)
-                        return new PlaceholderTab(placeholder, this);
-                    return new CategoryTab(this, category, tabArea);
-                }).toList());
-        tabNavigationBar.selectTab(currentTab, false);
-        tabNavigationBar.arrangeElements();
-        tabManager.setTabArea(tabArea);
-        addRenderableWidget(tabNavigationBar);
+//        tabNavigationBar = new ScrollableNavigationBar(this.width, tabManager, config.categories()
+//                .stream()
+//                .map(category -> {
+//                    if (category instanceof CustomTabProvider tabProvider) {
+//                        return tabProvider.createTab(this, tabArea);
+//					}
+//                    if (category instanceof PlaceholderCategory placeholder)
+//                        return new PlaceholderTab(placeholder, this);
+//                    return new CategoryTab(this, category, tabArea);
+//                }).toList());
+		tabNavigationBar = new VerticalNavigationBar(
+				height,
+				tabManager,
+				config.categories()
+					  .stream()
+					  .map(category -> {
+						  if (category instanceof CustomTabProvider tabProvider) {
+							  return tabProvider.createTab(this, tabArea);
+						  }
+						  if (category instanceof PlaceholderCategory placeholder)
+							  return new PlaceholderTab(placeholder, this);
+						  return new CategoryTab(this, category, tabArea);
+					  }).toList()
+		);
+		tabNavigationBar.selectTab(currentTab, false);
+		tabNavigationBar.arrangeElements();
+		tabManager.setTabArea(tabArea);
+		addRenderableWidget(tabNavigationBar);
 
-        config.initConsumer().accept(this);
-    }
+		config.initConsumer().accept(this);
+	}
 
-    public void addPopupControllerWidget(ControllerPopupWidget<?> controllerPopupWidget) {
+	public void addPopupControllerWidget(ControllerPopupWidget<?> controllerPopupWidget) {
 
-        //Safety check for the color picker
-        if (currentPopupController != null) {
-            clearPopupControllerWidget();
-        }
+		//Safety check for the color picker
+		if (currentPopupController != null) {
+			clearPopupControllerWidget();
+		}
 
-        currentPopupController = controllerPopupWidget;
-        popupControllerVisible = true;
+		currentPopupController = controllerPopupWidget;
+		popupControllerVisible = true;
 
-        OptionListWidget optionListWidget = null;
-        if(this.tabNavigationBar.getTabManager().getCurrentTab() instanceof CategoryTab categoryTab) {
-            optionListWidget = categoryTab.optionList.getList();
-        }
-        if(optionListWidget != null) {
-            this.minecraft.setScreen(new PopupControllerScreen(this, controllerPopupWidget));
-        }
-    }
+		OptionListWidget optionListWidget = null;
+		if (this.tabNavigationBar.getTabManager().getCurrentTab() instanceof CategoryTab categoryTab) {
+			optionListWidget = categoryTab.optionList.getList();
+		}
+		if (optionListWidget != null) {
+			this.minecraft.setScreen(new PopupControllerScreen(this, controllerPopupWidget));
+		}
+	}
 
-    public void clearPopupControllerWidget() {
-        if(Minecraft.getInstance().screen instanceof PopupControllerScreen popupControllerScreen) {
-            popupControllerScreen.onClose();
-        }
-        popupControllerVisible = false;
-        currentPopupController = null;
-    }
+	public void clearPopupControllerWidget() {
+		if (Minecraft.getInstance().screen instanceof PopupControllerScreen popupControllerScreen) {
+			popupControllerScreen.onClose();
+		}
+		popupControllerVisible = false;
+		currentPopupController = null;
+	}
 
-    @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+	@Override
+	public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+		super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
 
-        if (tabManager.getCurrentTab() instanceof TabExt tab) {
-            tab.renderBackground(guiGraphics);
-        }
-    }
+		if (tabManager.getCurrentTab() instanceof TabExt tab) {
+			tab.renderBackground(guiGraphics);
+		}
+	}
 
-    public void finishOrSave() {
-        saveButtonMessage = null;
+	public void finishOrSave() {
+		saveButtonMessage = null;
 
-        if (pendingChanges()) {
-            Set<OptionFlag> flags = new HashSet<>();
-            OptionUtils.forEachOptions(config, option -> {
-                if (option.applyValue()) {
-                    flags.addAll(option.flags());
-                }
-            });
-            OptionUtils.forEachOptions(config, option -> {
-                if (option.changed()) {
-                    // if still changed after applying, reset to the current value from binding
-                    // as something has gone wrong.
-                    option.forgetPendingValue();
-                    YACLConstants.LOGGER.error("Option '{}' value mismatch after applying! Reset to binding's getter.", option.name().getString());
-                }
-            });
-            config.saveFunction().run();
+		if (pendingChanges()) {
+			Set<OptionFlag> flags = new HashSet<>();
+			OptionUtils.forEachOptions(config, option -> {
+				if (option.applyValue()) {
+					flags.addAll(option.flags());
+				}
+			});
+			OptionUtils.forEachOptions(config, option -> {
+				if (option.changed()) {
+					// if still changed after applying, reset to the current value from binding
+					// as something has gone wrong.
+					option.forgetPendingValue();
+					YACLConstants.LOGGER.error("Option '{}' value mismatch after applying! Reset to binding's getter.", option.name().getString());
+				}
+			});
+			config.saveFunction().run();
 
-            flags.forEach(flag -> flag.accept(minecraft));
+			flags.forEach(flag -> flag.accept(minecraft));
 
-            pendingChanges = false;
-            if (tabManager.getCurrentTab() instanceof CategoryTab categoryTab) {
-                categoryTab.updateButtons();
-            }
-        } else onClose();
-    }
+			pendingChanges = false;
+			if (tabManager.getCurrentTab() instanceof CategoryTab categoryTab) {
+				categoryTab.updateButtons();
+			}
+		} else onClose();
+	}
 
-    public void cancelOrReset() {
-        if (pendingChanges()) { // if pending changes, button acts as a cancel button
-            OptionUtils.forEachOptions(config, Option::forgetPendingValue);
-            onClose();
-        } else { // if not, button acts as a reset button
-            OptionUtils.forEachOptions(config, Option::requestSetDefault);
-        }
-    }
+	public void cancelOrReset() {
+		if (pendingChanges()) { // if pending changes, button acts as a cancel button
+			OptionUtils.forEachOptions(config, Option::forgetPendingValue);
+			onClose();
+		} else { // if not, button acts as a reset button
+			OptionUtils.forEachOptions(config, Option::requestSetDefault);
+		}
+	}
 
-    public void undo() {
-        OptionUtils.forEachOptions(config, Option::forgetPendingValue);
-    }
+	public void undo() {
+		OptionUtils.forEachOptions(config, Option::forgetPendingValue);
+	}
 
-    @Override
-    public void tick() {
-        if (tabManager.getCurrentTab() instanceof TabExt tabExt) {
-            tabExt.tick();
-        }
+	@Override
+	public void tick() {
+		if (tabManager.getCurrentTab() instanceof TabExt tabExt) {
+			tabExt.tick();
+		}
 
-        if (tabManager.getCurrentTab() instanceof CategoryTab categoryTab) {
-            if (saveButtonMessage != null) {
-                if (saveButtonMessageTime > 140) {
-                    saveButtonMessage = null;
-                    saveButtonTooltipMessage = null;
-                    saveButtonMessageTime = 0;
-                } else {
-                    saveButtonMessageTime++;
-                    categoryTab.saveFinishedButton.setMessage(saveButtonMessage);
-                    if (saveButtonTooltipMessage != null) {
-                        categoryTab.saveFinishedButton.setTooltip(saveButtonTooltipMessage);
-                    }
-                }
-            }
-        }
-    }
+		if (tabManager.getCurrentTab() instanceof CategoryTab categoryTab) {
+			if (saveButtonMessage != null) {
+				if (saveButtonMessageTime > 140) {
+					saveButtonMessage = null;
+					saveButtonTooltipMessage = null;
+					saveButtonMessageTime = 0;
+				} else {
+					saveButtonMessageTime++;
+					categoryTab.saveFinishedButton.setMessage(saveButtonMessage);
+					if (saveButtonTooltipMessage != null) {
+						categoryTab.saveFinishedButton.setTooltip(saveButtonTooltipMessage);
+					}
+				}
+			}
+		}
+	}
 
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) {
-            this.setDragging(true);
-            return true;
-        }
-        return false;
-    }
+	@Override
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		if (super.mouseClicked(mouseX, mouseY, button)) {
+			this.setDragging(true);
+			return true;
+		}
+		return false;
+	}
 
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        return this.getFocused() != null
-                && this.isDragging()
-                && (button == InputConstants.MOUSE_BUTTON_LEFT || button == InputConstants.MOUSE_BUTTON_RIGHT)
-                && this.getFocused().mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
-    }
+	@Override
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		return this.getFocused() != null
+				&& this.isDragging()
+				&& (button == InputConstants.MOUSE_BUTTON_LEFT || button == InputConstants.MOUSE_BUTTON_RIGHT)
+				&& this.getFocused().mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+	}
 
-    public void setSaveButtonMessage(Component message, Component tooltip) {
-        saveButtonMessage = message;
-        saveButtonTooltipMessage = Tooltip.create(tooltip);
-        saveButtonMessageTime = 0;
-    }
+	public void setSaveButtonMessage(Component message, Component tooltip) {
+		saveButtonMessage = message;
+		saveButtonTooltipMessage = Tooltip.create(tooltip);
+		saveButtonMessageTime = 0;
+	}
 
-    public boolean pendingChanges() {
-        return pendingChanges;
-    }
+	public boolean pendingChanges() {
+		return pendingChanges;
+	}
 
-    private void onOptionChanged(Option<?> option) {
-        pendingChanges = false;
+	private void onOptionChanged(Option<?> option) {
+		pendingChanges = false;
 
-        OptionUtils.consumeOptions(config, opt -> {
-            pendingChanges |= opt.changed();
-            return pendingChanges;
-        });
+		OptionUtils.consumeOptions(config, opt -> {
+			pendingChanges |= opt.changed();
+			return pendingChanges;
+		});
 
-        if (tabManager.getCurrentTab() instanceof CategoryTab categoryTab) {
-            categoryTab.updateButtons();
-        }
-    }
+		if (tabManager.getCurrentTab() instanceof CategoryTab categoryTab) {
+			categoryTab.updateButtons();
+		}
+	}
 
-    @Override
-    public boolean shouldCloseOnEsc() {
-        if (pendingChanges()) {
-            setSaveButtonMessage(Component.translatable("yacl.gui.save_before_exit").withStyle(ChatFormatting.RED), Component.translatable("yacl.gui.save_before_exit.tooltip"));
-            return false;
-        }
-        return true;
-    }
+	@Override
+	public boolean shouldCloseOnEsc() {
+		if (pendingChanges()) {
+			setSaveButtonMessage(Component.translatable("yacl.gui.save_before_exit").withStyle(ChatFormatting.RED), Component.translatable("yacl.gui.save_before_exit.tooltip"));
+			return false;
+		}
+		return true;
+	}
 
-    @Override
-    public void onClose() {
-        minecraft.setScreen(parent);
-    }
+	@Override
+	public void onClose() {
+		minecraft.setScreen(parent);
+	}
 
-    public static void renderMultilineTooltip(GuiGraphics graphics, Font font, MultiLineLabel text, int centerX, int yAbove, int yBelow, int screenWidth, int screenHeight) {
-        if (text.getLineCount() > 0) {
-            int maxWidth = text.getWidth();
-            int lineHeight = font.lineHeight + 1;
-            int height = text.getLineCount() * lineHeight - 1;
+	public static void renderMultilineTooltip(GuiGraphics graphics, Font font, MultiLineLabel text, int centerX, int yAbove, int yBelow, int screenWidth, int screenHeight) {
+		if (text.getLineCount() > 0) {
+			int maxWidth = text.getWidth();
+			int lineHeight = font.lineHeight + 1;
+			int height = text.getLineCount() * lineHeight - 1;
 
-            int belowY = yBelow + 12;
-            int aboveY = yAbove - height + 12;
-            int maxBelow = screenHeight - (belowY + height);
-            int minAbove = aboveY - height;
-            int y = aboveY;
-            if (minAbove < 8)
-                y = maxBelow > minAbove ? belowY : aboveY;
+			int belowY = yBelow + 12;
+			int aboveY = yAbove - height + 12;
+			int maxBelow = screenHeight - (belowY + height);
+			int minAbove = aboveY - height;
+			int y = aboveY;
+			if (minAbove < 8)
+				y = maxBelow > minAbove ? belowY : aboveY;
 
-            int x = Math.max(centerX - text.getWidth() / 2 - 12, -6);
+			int x = Math.max(centerX - text.getWidth() / 2 - 12, -6);
 
-            int drawX = x + 12;
-            int drawY = y - 12;
+			int drawX = x + 12;
+			int drawY = y - 12;
 
-            GuiUtils.pushPose(graphics);
-            TooltipRenderUtil.renderTooltipBackground(
-                    graphics,
-                    drawX,
-                    drawY,
-                    maxWidth,
-                    height
-                    //? if <1.21.6
-                    ,400
-                    //? if >=1.21.2
-                    ,null
-            );
-            GuiUtils.translateZ(graphics, 400);
+			GuiUtils.pushPose(graphics);
+			TooltipRenderUtil.renderTooltipBackground(
+					graphics,
+					drawX,
+					drawY,
+					maxWidth,
+					height
+					//? if <1.21.6
+					, 400
+					//? if >=1.21.2
+					, null
+			);
+			GuiUtils.translateZ(graphics, 400);
 
-            text.renderLeftAligned(graphics, drawX, drawY, lineHeight, -1);
+			text.renderLeftAligned(graphics, drawX, drawY, lineHeight, -1);
 
-            GuiUtils.popPose(graphics);
-        }
-    }
+			GuiUtils.popPose(graphics);
+		}
+	}
 
     public void updateGlobalSearch(String search) {
         int nextTabWithSearch = -1;
@@ -316,79 +334,80 @@ public class YACLScreen extends Screen {
     public static class CategoryTab implements TabExt {
         private static final ResourceLocation DARKER_BG = YACLPlatform.mcRl("textures/gui/menu_list_background.png");
 
-        private final YACLScreen screen;
-        private final ConfigCategory category;
-        private final Tooltip tooltip;
+		private final YACLScreen screen;
+		private final ConfigCategory category;
+		private final Tooltip tooltip;
 
-        private ListHolderWidget<OptionListWidget> optionList;
-        public final Button saveFinishedButton;
-        public final Button cancelResetButton;
-        public final Button undoButton;
-        private final SearchFieldWidget searchField;
-        private OptionDescriptionWidget descriptionWidget;
+		private ListHolderWidget<OptionListWidget> optionList;
+		public final Button saveFinishedButton;
+		public final Button cancelResetButton;
+		public final Button undoButton;
+		private final SearchFieldWidget searchField;
+		private OptionDescriptionWidget descriptionWidget;
 
-        private final ScreenRectangle rightPaneDim;
+		private final ScreenRectangle rightPaneDim;
 
-        public CategoryTab(YACLScreen screen, ConfigCategory category, ScreenRectangle tabArea) {
-            this.screen = screen;
-            this.category = category;
-            this.tooltip = Tooltip.create(category.tooltip());
+		public CategoryTab(YACLScreen screen, ConfigCategory category, ScreenRectangle tabArea) {
+			this.screen = screen;
+			this.category = category;
+			this.tooltip = Tooltip.create(category.tooltip());
 
-            int columnWidth = screen.width / 3;
-            int padding = columnWidth / 20;
-            columnWidth = Math.min(columnWidth, 400);
-            int paddedWidth = columnWidth - padding * 2;
-            rightPaneDim = new ScreenRectangle(screen.width / 3 * 2, tabArea.top() + 1, screen.width / 3, tabArea.height());
-            MutableDimension<Integer> actionDim = Dimension.ofInt(screen.width / 3 * 2 + screen.width / 6, screen.height - padding - 20, paddedWidth, 20);
+			int nonFinalColumnWidth = screen.width / 4;
+			int padding = nonFinalColumnWidth / 20;
+			final int columnWidth = Math.min(nonFinalColumnWidth, 400);
+			int paddedWidth = columnWidth - padding * 2;
+			rightPaneDim = new ScreenRectangle(columnWidth * 3, tabArea.top() + 1, columnWidth, tabArea.height());
+			MutableDimension<Integer> actionDim = Dimension.ofInt(rightPaneDim.left() + padding, screen.height - padding - 20, paddedWidth, 20);
 
-            saveFinishedButton = Button.builder(Component.literal("Done"), btn -> screen.finishOrSave())
-                    .pos(actionDim.x() - actionDim.width() / 2, actionDim.y())
-                    .size(actionDim.width(), actionDim.height())
-                    .build();
+			saveFinishedButton = Button.builder(Component.literal("Done"), btn -> screen.finishOrSave())
+									   .pos(actionDim.x(), actionDim.y())
+									   .size(actionDim.width(), actionDim.height())
+									   .build();
 
-            actionDim.expand(-actionDim.width() / 2 - 2, 0).move(-actionDim.width() / 2 - 2, -22);
-            cancelResetButton = Button.builder(Component.literal("Cancel"), btn -> screen.cancelOrReset())
-                    .pos(actionDim.x() - actionDim.width() / 2, actionDim.y())
-                    .size(actionDim.width(), actionDim.height())
-                    .build();
+			actionDim.expand(-actionDim.width() / 2 - 2, 0).move(0, -22);
+			cancelResetButton = Button.builder(Component.literal("Cancel"), btn -> screen.cancelOrReset())
+									  .pos(actionDim.x(), actionDim.y())
+									  .size(actionDim.width(), actionDim.height())
+									  .build();
 
-            actionDim.move(actionDim.width() + 4, 0);
-            undoButton = Button.builder(Component.translatable("yacl.gui.undo"), btn -> screen.undo())
-                    .pos(actionDim.x() - actionDim.width() / 2, actionDim.y())
-                    .size(actionDim.width(), actionDim.height())
-                    .tooltip(Tooltip.create(Component.translatable("yacl.gui.undo.tooltip")))
-                    .build();
+			actionDim.move(actionDim.width() + 4, 0);
+			undoButton = Button.builder(Component.translatable("yacl.gui.undo"), btn -> screen.undo())
+							   .pos(actionDim.x(), actionDim.y())
+							   .size(actionDim.width(), actionDim.height())
+							   .tooltip(Tooltip.create(Component.translatable("yacl.gui.undo.tooltip")))
+							   .build();
 
-            searchField = new SearchFieldWidget(
-                    screen,
-                    screen.font,
-                    screen.width / 3 * 2 + screen.width / 6 - paddedWidth / 2 + 1,
-                    undoButton.getY() - 22,
-                    paddedWidth - 2, 18,
-                    Component.translatable("gui.recipebook.search_hint"),
-                    Component.translatable("gui.recipebook.search_hint"),
-                    screen::updateGlobalSearch
-            );
+			searchField = new SearchFieldWidget(
+					screen,
+					screen.font,
+					columnWidth * 3 + padding,
+					undoButton.getY() - 22,
+					paddedWidth - 2, 18,
+					Component.translatable("gui.recipebook.search_hint"),
+					Component.translatable("gui.recipebook.search_hint"),
+					screen::updateGlobalSearch
+			);
 
-            this.optionList = new ListHolderWidget<>(
-                    () -> new ScreenRectangle(tabArea.position(), tabArea.width() / 3 * 2, tabArea.height()),
-                    new OptionListWidget(screen, category, screen.minecraft, 0, 0, screen.width / 3 * 2 + 1, screen.height, desc -> {
-                        descriptionWidget.setOptionDescription(desc);
-                    })
-            );
+			final int optionListWidth = screen.width - rightPaneDim.width() - tabArea.width() - 4;
+			this.optionList = new ListHolderWidget<>(
+					() -> new ScreenRectangle(tabArea.right(), tabArea.top(), optionListWidth, tabArea.height()),
+					new OptionListWidget(screen, category, screen.minecraft, tabArea.right(), tabArea.top(), optionListWidth, tabArea.height(), desc ->
+							descriptionWidget.setOptionDescription(desc)
+					)
+			);
 
-            descriptionWidget = new OptionDescriptionWidget(
-                    () -> new ScreenRectangle(
-                            screen.width / 3 * 2 + padding,
-                            tabArea.top() + padding,
-                            paddedWidth,
-                            searchField.getY() - 1 - tabArea.top() - padding * 2
-                    ),
-                    null
-            );
+			descriptionWidget = new OptionDescriptionWidget(
+					() -> new ScreenRectangle(
+							rightPaneDim.left() + padding,
+							rightPaneDim.top() + padding,
+							paddedWidth,
+							searchField.getY() - 1 - padding * 2
+					),
+					null
+			);
 
-            updateButtons();
-        }
+			updateButtons();
+		}
 
         public boolean hasSearch() {
             return !optionList.getList().children().isEmpty();
@@ -403,91 +422,100 @@ public class YACLScreen extends Screen {
             return copy;
         }
 
-        @Override
-        public void visitChildren(Consumer<AbstractWidget> consumer) {
-            consumer.accept(optionList);
-            consumer.accept(saveFinishedButton);
-            consumer.accept(cancelResetButton);
-            consumer.accept(undoButton);
-            consumer.accept(searchField);
-            consumer.accept(descriptionWidget);
-        }
+		@Override
+		public void visitChildren(Consumer<AbstractWidget> consumer) {
+			consumer.accept(optionList);
+			consumer.accept(saveFinishedButton);
+			consumer.accept(cancelResetButton);
+			consumer.accept(undoButton);
+			consumer.accept(searchField);
+			consumer.accept(descriptionWidget);
+		}
 
-        @Override
-        public void renderBackground(GuiGraphics graphics) {
-            // right pane darker db
-            GuiUtils.blitGuiTex(graphics, DARKER_BG, rightPaneDim.left(), rightPaneDim.top(), rightPaneDim.right() + 2, rightPaneDim.bottom() + 2, rightPaneDim.width() + 2, rightPaneDim.height() + 2, 32, 32);
-            
-            // top separator for right pane
-            GuiUtils.pushPose(graphics);
-            GuiUtils.translateZ(graphics, 10);
-            GuiUtils.blitGuiTex(graphics, CreateWorldScreen.HEADER_SEPARATOR, rightPaneDim.left() - 1, rightPaneDim.top() - 2, 0.0F, 0.0F, rightPaneDim.width() + 1, 2, 32, 2);
-            GuiUtils.popPose(graphics);
+		@Override
+		public void renderBackground(GuiGraphics graphics) {
+			// right pane darker bg
+			GuiUtils.blitGuiTex(graphics, DARKER_BG, rightPaneDim.left(), rightPaneDim.top(), rightPaneDim.right() + 2, rightPaneDim.bottom() + 2, rightPaneDim.width() + 2, rightPaneDim.height() + 2, 32, 32);
+			// left pane darker bg
+			GuiUtils.blitGuiTex(graphics, DARKER_BG, screen.tabArea.left(), screen.tabArea.top(), screen.tabArea.right() + 2, screen.tabArea.bottom() + 2, screen.tabArea.width() + 2, screen.tabArea.height() + 2, 32, 32);
 
-            // left separator for right pane
-            GuiUtils.pushPose(graphics);
-            GuiUtils.translate2D(graphics, rightPaneDim.left(), rightPaneDim.top() - 1);
-            GuiUtils.rotate2D(graphics, 90);
-            GuiUtils.blitGuiTex(graphics, CreateWorldScreen.FOOTER_SEPARATOR, 0, 0, 0f, 0f, rightPaneDim.height() + 1, 2, 32, 2);
-            GuiUtils.popPose(graphics);
-        }
+			// top separator for right pane
+			GuiUtils.pushPose(graphics);
+			GuiUtils.translateZ(graphics, 10);
+			GuiUtils.blitGuiTex(graphics, CreateWorldScreen.HEADER_SEPARATOR, rightPaneDim.left() - 1, rightPaneDim.top() - 2, 0.0F, 0.0F, rightPaneDim.width() + 1, 2, 32, 2);
+			GuiUtils.popPose(graphics);
 
-        @Override
-        public void doLayout(ScreenRectangle screenRectangle) {
+			// left separator for right pane
+			GuiUtils.pushPose(graphics);
+			GuiUtils.translate2D(graphics, rightPaneDim.left(), rightPaneDim.top() - 1);
+			GuiUtils.rotate2D(graphics, 90);
+			GuiUtils.blitGuiTex(graphics, CreateWorldScreen.FOOTER_SEPARATOR, 0, 0, 0f, 0f, rightPaneDim.height() + 1, 2, 32, 2);
+			GuiUtils.popPose(graphics);
 
-        }
+			// right separator for right pane
+			GuiUtils.pushPose(graphics);
+			GuiUtils.translate2D(graphics, screen.tabArea.right() + 2, screen.tabArea.top() - 1);
+			GuiUtils.rotate2D(graphics, 90);
+			GuiUtils.blitGuiTex(graphics, CreateWorldScreen.HEADER_SEPARATOR, 0, 0, 0f, 0f, screen.tabArea.height() + 1, 2, 32, 2);
+			GuiUtils.popPose(graphics);
+		}
 
-        @Override
-        public void tick() {
-            descriptionWidget.tick();
-        }
+		@Override
+		public void doLayout(ScreenRectangle screenRectangle) {
 
-        @Nullable
-        @Override
-        public Tooltip getTooltip() {
-            return tooltip;
-        }
+		}
 
-        public void updateButtons() {
-            boolean pendingChanges = screen.pendingChanges();
+		@Override
+		public void tick() {
+			descriptionWidget.tick();
+		}
 
-            undoButton.active = pendingChanges;
-            saveFinishedButton.setMessage(pendingChanges ? Component.translatable("yacl.gui.save") : GuiUtils.translatableFallback("yacl.gui.done", CommonComponents.GUI_DONE));
-            saveFinishedButton.setTooltip(Tooltip.create(pendingChanges ? Component.translatable("yacl.gui.save.tooltip") : Component.translatable("yacl.gui.finished.tooltip")));
-            cancelResetButton.setMessage(pendingChanges ? GuiUtils.translatableFallback("yacl.gui.cancel", CommonComponents.GUI_CANCEL) : Component.translatable("controls.reset"));
-            cancelResetButton.setTooltip(Tooltip.create(pendingChanges ? Component.translatable("yacl.gui.cancel.tooltip") : Component.translatable("yacl.gui.reset.tooltip")));
-        }
-    }
+		@Nullable
+		@Override
+		public Tooltip getTooltip() {
+			return tooltip;
+		}
 
-    public static class PlaceholderTab implements TabExt {
-        private final YACLScreen screen;
-        private final PlaceholderCategory category;
-        private final Tooltip tooltip;
+		public void updateButtons() {
+			boolean pendingChanges = screen.pendingChanges();
 
-        public PlaceholderTab(PlaceholderCategory category, YACLScreen screen) {
-            this.screen = screen;
-            this.category = category;
-            this.tooltip = Tooltip.create(category.tooltip());
-        }
+			undoButton.active = pendingChanges;
+			saveFinishedButton.setMessage(pendingChanges ? Component.translatable("yacl.gui.save") : GuiUtils.translatableFallback("yacl.gui.done", CommonComponents.GUI_DONE));
+			saveFinishedButton.setTooltip(Tooltip.create(pendingChanges ? Component.translatable("yacl.gui.save.tooltip") : Component.translatable("yacl.gui.finished.tooltip")));
+			cancelResetButton.setMessage(pendingChanges ? GuiUtils.translatableFallback("yacl.gui.cancel", CommonComponents.GUI_CANCEL) : Component.translatable("controls.reset"));
+			cancelResetButton.setTooltip(Tooltip.create(pendingChanges ? Component.translatable("yacl.gui.cancel.tooltip") : Component.translatable("yacl.gui.reset.tooltip")));
+		}
+	}
 
-        @Override
-        public Component getTabTitle() {
-            return category.name();
-        }
+	public static class PlaceholderTab implements TabExt {
+		private final YACLScreen screen;
+		private final PlaceholderCategory category;
+		private final Tooltip tooltip;
 
-        @Override
-        public void visitChildren(Consumer<AbstractWidget> consumer) {
+		public PlaceholderTab(PlaceholderCategory category, YACLScreen screen) {
+			this.screen = screen;
+			this.category = category;
+			this.tooltip = Tooltip.create(category.tooltip());
+		}
 
-        }
+		@Override
+		public Component getTabTitle() {
+			return category.name();
+		}
 
-        @Override
-        public void doLayout(ScreenRectangle screenRectangle) {
-            screen.minecraft.setScreen(category.screen().apply(screen.minecraft, screen));
-        }
+		@Override
+		public void visitChildren(Consumer<AbstractWidget> consumer) {
 
-        @Override
-        public @Nullable Tooltip getTooltip() {
-            return this.tooltip;
-        }
-    }
+		}
+
+		@Override
+		public void doLayout(ScreenRectangle screenRectangle) {
+			screen.minecraft.setScreen(category.screen().apply(screen.minecraft, screen));
+		}
+
+		@Override
+		public @Nullable Tooltip getTooltip() {
+			return this.tooltip;
+		}
+	}
 }
