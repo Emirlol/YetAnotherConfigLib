@@ -216,11 +216,11 @@ public class VerticalNavigationBar extends AbstractContainerEventHandler impleme
 
 	@Override
 	public void setFocused(boolean focused) {
-        super.setFocused(focused);
-        if (this.getFocused() != null) {
-            this.getFocused().setFocused(focused);
-        }
-    }
+		super.setFocused(focused);
+		if (this.getFocused() != null) {
+			this.getFocused().setFocused(focused);
+		}
+	}
 
 	@Override
 	public void setFocused(@Nullable GuiEventListener child) {
@@ -236,6 +236,12 @@ public class VerticalNavigationBar extends AbstractContainerEventHandler impleme
 			this.setScrollOffset(this.scrollOffset - (NAVBAR_MARGIN - tabButton.getY()));
 		} else if (tabButton.getBottom() > height - NAVBAR_MARGIN) {
 			this.setScrollOffset(this.scrollOffset + tabButton.getBottom() - (height - NAVBAR_MARGIN));
+		}
+	}
+
+	public void updateTabNames() {
+		for (TabButton tabButton : tabButtons) {
+			tabButton.setMessage(tabButton.tab().getTabTitle());
 		}
 	}
 }
